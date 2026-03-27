@@ -143,8 +143,6 @@ const DEFAULT_SETTINGS: ObsidianGeminiSettings = {
 	alwaysShowDiffView: false,
 };
 
-const MIGRATION_SECRET_NAME = 'gemini-scribe-api-key';
-
 export const VIEW_TYPE_DIFF = 'gemini-diff-view';
 
 export default class ObsidianGemini extends Plugin {
@@ -234,13 +232,14 @@ export default class ObsidianGemini extends Plugin {
 	private getApiKeyErrorMessage(): string {
 		if (!this.settings.ollamaBaseUrl) {
 			return (
-				'No Gemini API key configured. Open Settings \u2192 Gemini Scribe to add one. ' +
-				'Get a free key at aistudio.google.com/apikey'
+				'No Ollama Base URL configured. Open Settings \u2192 Gemini Scribe and set the Ollama Base URL ' +
+				'(e.g. http://localhost:11434). Make sure your local Ollama server is running.'
 			);
 		}
 		return (
-			'Could not retrieve your API key from secure storage. ' +
-			'Try re-entering it in Settings \u2192 Gemini Scribe \u2192 API Key.'
+			'Could not connect to the Ollama server at ' +
+			this.settings.ollamaBaseUrl +
+			'. Check that Ollama is running and the Base URL in Settings \u2192 Gemini Scribe is correct.'
 		);
 	}
 
@@ -863,19 +862,12 @@ export default class ObsidianGemini extends Plugin {
 		const data = await this.loadData();
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
 
-		// One-time migration: move API key from data.json to secret storage
+		// One-time migration: copy ollamaUrl directly into ollamaBaseUrl (no secret storage needed)
 		if (!this.settings.ollamaBaseUrl && data?.ollamaUrl) {
-			this.app.secretStorage.setSecret(MIGRATION_SECRET_NAME, data.ollamaUrl);
-			// Verify the secret was stored before deleting the original
-			const stored = this.app.secretStorage.getSecret(MIGRATION_SECRET_NAME);
-			if (stored === data.ollamaUrl) {
-				this.settings.ollamaBaseUrl = MIGRATION_SECRET_NAME;
-				delete (this.settings as any).ollamaUrl;
-				await this.saveData(this.settings);
-				this.logger?.log('Migrated API key from settings to secure storage');
-			} else {
-				this.logger?.error('API key migration failed: verification mismatch, keeping key in settings');
-			}
+			this.settings.ollamaBaseUrl = data.ollamaUrl;
+			delete (this.settings as any).ollamaUrl;
+			await this.saveData(this.settings);
+			this.logger?.log('Migrated ollamaUrl to ollamaBaseUrl in settings');
 		}
 
 		// Only run model version updates if dynamic discovery is disabled

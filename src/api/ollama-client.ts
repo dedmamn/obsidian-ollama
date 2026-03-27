@@ -194,11 +194,64 @@ export class OllamaClient implements ModelApi {
 			messages.push({ role: 'system', content: systemInstruction });
 
 			if (extReq.conversationHistory?.length) {
+				// Track the most recent tool call id by function name so we can correlate responses.
+				const lastToolCallId: Record<string, string> = {};
+				let toolCallCounter = 0;
+
 				for (const entry of extReq.conversationHistory) {
 					if ('role' in entry && 'parts' in entry) {
-						// Gemini format
-						const content = entry.parts.map((p: any) => p.text || '').join('');
-						messages.push({ role: entry.role === 'model' ? 'assistant' : 'user', content });
+						// Gemini format — map tool-call and tool-result parts to Ollama format
+						const role = entry.role === 'model' ? 'assistant' : entry.role;
+						const parts: any[] = entry.parts;
+
+						// Check for functionCall parts (assistant calling a tool)
+						const functionCallParts = parts.filter((p: any) => p.functionCall);
+						// Check for functionResponse parts (tool results, stored in user turns)
+						const functionResponseParts = parts.filter((p: any) => p.functionResponse);
+						const textContent = parts
+							.filter((p: any) => p.text)
+							.map((p: any) => p.text)
+							.join('');
+
+						if (functionCallParts.length > 0) {
+							// Assistant message with tool calls — include id for each call
+							const toolCalls = functionCallParts.map((p: any) => {
+								const id = `call_${p.functionCall.name}_${toolCallCounter++}`;
+								lastToolCallId[p.functionCall.name] = id;
+								return {
+									id,
+									type: 'function' as const,
+									function: {
+										name: p.functionCall.name,
+										arguments: JSON.stringify(p.functionCall.args || {}),
+									},
+								};
+							});
+							messages.push({
+								role: 'assistant',
+								content: textContent,
+								tool_calls: toolCalls,
+							});
+						} else if (functionResponseParts.length > 0) {
+							// Each functionResponse maps to a separate tool message
+							for (const p of functionResponseParts) {
+								const toolCallId = lastToolCallId[p.functionResponse.name] ?? `call_${p.functionResponse.name}_0`;
+								messages.push({
+									role: 'tool',
+									tool_call_id: toolCallId,
+									content:
+										typeof p.functionResponse.response === 'string'
+											? p.functionResponse.response
+											: JSON.stringify(p.functionResponse.response),
+								});
+							}
+							// If there's additional text in the same turn, emit it as a user message
+							if (textContent) {
+								messages.push({ role: 'user', content: textContent });
+							}
+						} else {
+							messages.push({ role, content: textContent });
+						}
 					} else if ('role' in entry && 'text' in entry) {
 						messages.push({ role: entry.role === 'model' ? 'assistant' : 'user', content: entry.text });
 					} else if ('role' in entry && 'message' in entry) {

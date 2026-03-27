@@ -19,8 +19,8 @@ import contextSummaryPromptContent from '../../prompts/contextSummaryPrompt.txt'
 /** Aggressive compaction triggers at this % of total model context window */
 const AGGRESSIVE_COMPACTION_THRESHOLD_PERCENT = 80;
 
-/** Default model input token limit (1M for all current Gemini models) */
-// const DEFAULT_INPUT_TOKEN_LIMIT = 1_000_000;
+/** Default model input token limit (100k is a safe default for Ollama models) */
+const DEFAULT_INPUT_TOKEN_LIMIT = 100_000;
 
 /** Minimum number of recent turns to preserve during compaction */
 const MIN_RECENT_TURNS_TO_KEEP = 6;
@@ -152,14 +152,14 @@ export class ContextManager {
 	 */
 	private async getCompactionThreshold(_modelName: string): Promise<number> {
 		const threshold = this.plugin.settings.contextCompactionThreshold / 100;
-		return Math.floor(100000 * threshold);
+		return Math.floor(DEFAULT_INPUT_TOKEN_LIMIT * threshold);
 	}
 
 	/**
 	 * Get the aggressive compaction threshold in tokens.
 	 */
 	private async getAggressiveThreshold(_modelName: string): Promise<number> {
-		return Math.floor(100000 * (AGGRESSIVE_COMPACTION_THRESHOLD_PERCENT / 100));
+		return Math.floor(DEFAULT_INPUT_TOKEN_LIMIT * (AGGRESSIVE_COMPACTION_THRESHOLD_PERCENT / 100));
 	}
 
 	/**
@@ -168,10 +168,12 @@ export class ContextManager {
 	async getTokenUsage(_modelName: string): Promise<TokenUsageInfo> {
 		const estimatedTokens = this.lastUsageMetadata?.promptTokenCount ?? 0;
 		const cachedTokens = this.lastUsageMetadata?.cachedContentTokenCount ?? 0;
+		const inputTokenLimit = DEFAULT_INPUT_TOKEN_LIMIT;
+		const percentUsed = inputTokenLimit > 0 ? Math.round((estimatedTokens / inputTokenLimit) * 100) : 0;
 		return {
 			estimatedTokens,
-			inputTokenLimit: 100000,
-			percentUsed: 0,
+			inputTokenLimit,
+			percentUsed,
 			cachedTokens,
 		};
 	}
@@ -224,6 +226,10 @@ export class ContextManager {
 	 * Count tokens for a given set of contents using the Gemini API.
 	 */
 	async countTokens(modelName: string, contents: any[]): Promise<number> {
+		if (!this.ai) {
+			// No token-counting API available (e.g. Ollama); fall back to cached estimate
+			return this.lastUsageMetadata?.promptTokenCount ?? 0;
+		}
 		try {
 			const config: any = {};
 
@@ -382,6 +388,10 @@ export class ContextManager {
 	 * Generate a summary of conversation turns using Gemini.
 	 */
 	private async summarizeConversation(turns: any[], modelName: string): Promise<string> {
+		if (!this.ai) {
+			// No summarization API available (e.g. Ollama); return fallback
+			return 'Previous conversation context could not be summarized. The conversation continues below.';
+		}
 		// Convert turns to readable text for summarization
 		const conversationText = turns
 			.map((turn) => {
