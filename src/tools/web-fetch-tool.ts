@@ -2,7 +2,7 @@ import { Tool, ToolResult, ToolExecutionContext } from './types';
 import { ToolCategory } from '../types/agent';
 import { ToolClassification } from '../types/tool-policy';
 import type ObsidianGemini from '../main';
-import { GoogleGenAI } from '@google/genai';
+
 import { requestUrlWithRetry } from '../utils/proxy-fetch';
 import TurndownService from 'turndown';
 import { decodeHtmlEntities } from '../utils/html-entities';
@@ -53,7 +53,7 @@ export class WebFetchTool implements Tool {
 	async execute(params: { url: string; query: string }, context: ToolExecutionContext): Promise<ToolResult> {
 		const plugin = context.plugin as InstanceType<typeof ObsidianGemini>;
 
-		if (!plugin.apiKey) {
+		if (!plugin.ollamaUrl) {
 			return {
 				success: false,
 				error: 'API key not configured',
@@ -71,7 +71,10 @@ export class WebFetchTool implements Tool {
 			}
 
 			// Create a new instance of GoogleGenAI
-			const genAI = new GoogleGenAI({ apiKey: plugin.apiKey });
+			throw new Error(
+				'Web fetch with model extraction is not supported natively with Ollama without custom implementations'
+			);
+			const genAI = {} as any;
 
 			// Use the same model that's configured for chat
 			// This ensures consistency with the main conversation
@@ -246,7 +249,10 @@ export class WebFetchTool implements Tool {
 			}
 
 			// Now use Gemini to analyze the content
-			const genAI = new GoogleGenAI({ apiKey: plugin.apiKey });
+			throw new Error(
+				'Web fetch with model extraction is not supported natively with Ollama without custom implementations'
+			);
+			const genAI = {} as any;
 			const modelToUse = plugin.settings.chatModelName || 'gemini-2.5-flash';
 
 			// Create a prompt with the content

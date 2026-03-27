@@ -1,5 +1,5 @@
 import { TFile, normalizePath, Notice, setIcon, setTooltip } from 'obsidian';
-import { GoogleGenAI } from '@google/genai';
+
 import { FileUploader } from '@allenhutchison/gemini-utils';
 import type ObsidianGemini from '../main';
 import { ObsidianVaultAdapter } from './obsidian-file-adapter';
@@ -114,7 +114,7 @@ const RATE_LIMIT_MAX_RETRIES = 5; // Maximum retry attempts before failing
  */
 export class RagIndexingService {
 	private plugin: ObsidianGemini;
-	private ai: GoogleGenAI | null = null;
+	private ai: any = null;
 	private fileUploader: FileUploader | null = null;
 	private vaultAdapter: ObsidianVaultAdapter | null = null;
 	private statusBarItem: HTMLElement | null = null;
@@ -164,7 +164,7 @@ export class RagIndexingService {
 			return;
 		}
 
-		if (!this.plugin.apiKey) {
+		if (!this.plugin.ollamaUrl) {
 			this.plugin.logger.warn('RAG Indexing: No API key configured');
 			this.status = 'error';
 			return;
@@ -172,7 +172,8 @@ export class RagIndexingService {
 
 		try {
 			// Initialize Google GenAI client
-			this.ai = new GoogleGenAI({ apiKey: this.plugin.apiKey });
+			this.ai = null;
+			throw new Error('RAG Indexing is not supported with Ollama');
 
 			// Create vault adapter for file operations
 			this.vaultAdapter = new ObsidianVaultAdapter({
@@ -299,7 +300,7 @@ export class RagIndexingService {
 	/**
 	 * Get the GoogleGenAI client for reuse by other components
 	 */
-	getClient(): GoogleGenAI | null {
+	getClient(): any | null {
 		return this.ai;
 	}
 

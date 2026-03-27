@@ -1,6 +1,6 @@
 import { TFile, normalizePath } from 'obsidian';
 import type ObsidianGemini from '../main';
-import { GoogleGenAI } from '@google/genai';
+
 import { ResearchManager, ReportGenerator, Interaction } from '@allenhutchison/gemini-utils';
 import { proxyFetch } from '../utils/proxy-fetch';
 import { executeWithRetry, RetryConfig, DEFAULT_RETRY_CONFIG } from '../utils/retry';
@@ -53,14 +53,14 @@ export class DeepResearchService {
 	 * Initialize the ResearchManager with a GoogleGenAI client
 	 */
 	private ensureResearchManager(): ResearchManager {
-		if (!this.plugin.apiKey) {
+		if (!this.plugin.ollamaUrl) {
 			throw new Error('Google API key not configured');
 		}
 
 		if (!this.researchManager) {
-			const genAI = new GoogleGenAI({
-				apiKey: this.plugin.apiKey,
-			});
+			throw new Error('Deep Research is not supported with Ollama');
+			// @ts-ignore
+			const genAI = {} as any;
 
 			// WORKAROUND (as of @google/genai v0.14.x): The GoogleGenAI interactions getter creates
 			// a new client that ignores the fetch option passed to the constructor. We must manually

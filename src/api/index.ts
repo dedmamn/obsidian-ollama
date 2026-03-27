@@ -15,8 +15,8 @@ export type {
 } from './interfaces/model-api';
 
 // Export the simplified factory
-export { GeminiClientFactory, ModelUseCase } from './simple-factory';
+export { OllamaClientFactory, ModelUseCase } from './simple-factory';
 
 // Export the client
-export { GeminiClient } from './gemini-client';
-export type { GeminiClientConfig } from './gemini-client';
+export { OllamaClient } from './ollama-client';
+export type { OllamaClientConfig } from './ollama-client';

@@ -51,7 +51,7 @@ export interface RagIndexingSettings {
 }
 
 export interface ObsidianGeminiSettings {
-	apiKeySecretName: string;
+	ollamaBaseUrl: string;
 	chatModelName: string;
 	summaryModelName: string;
 	completionsModelName: string;
@@ -92,7 +92,7 @@ export interface ObsidianGeminiSettings {
 }
 
 const DEFAULT_SETTINGS: ObsidianGeminiSettings = {
-	apiKeySecretName: '',
+	ollamaBaseUrl: 'http://localhost:11434',
 	chatModelName: getDefaultModelForRole('chat'),
 	summaryModelName: getDefaultModelForRole('summary'),
 	completionsModelName: getDefaultModelForRole('completions'),
@@ -150,10 +150,8 @@ export const VIEW_TYPE_DIFF = 'gemini-diff-view';
 export default class ObsidianGemini extends Plugin {
 	settings: ObsidianGeminiSettings;
 
-	get apiKey(): string {
-		const secretName = this.settings?.apiKeySecretName;
-		if (!secretName) return '';
-		return this.app.secretStorage.getSecret(secretName) ?? '';
+	get ollamaUrl(): string {
+		return this.settings?.ollamaBaseUrl ?? 'http://localhost:11434';
 	}
 
 	// Public members
@@ -203,7 +201,7 @@ export default class ObsidianGemini extends Plugin {
 		try {
 			await this.setupGeminiScribe();
 			this.isGeminiInitialized = true;
-			this.previousApiKey = this.apiKey;
+			this.previousApiKey = this.ollamaUrl;
 			this.previousRagEnabled = this.settings.ragIndexing.enabled;
 		} catch (error) {
 			this.logger.error('Failed to initialize Gemini Scribe:', error);
@@ -234,7 +232,7 @@ export default class ObsidianGemini extends Plugin {
 	 * Distinguishes between "never configured" and "storage retrieval failure".
 	 */
 	private getApiKeyErrorMessage(): string {
-		if (!this.settings.apiKeySecretName) {
+		if (!this.settings.ollamaBaseUrl) {
 			return (
 				'No Gemini API key configured. Open Settings \u2192 Gemini Scribe to add one. ' +
 				'Get a free key at aistudio.google.com/apikey'
@@ -584,7 +582,7 @@ export default class ObsidianGemini extends Plugin {
 		// Initialize prompt manager
 		this.promptManager = new PromptManager(this, this.app.vault);
 
-		// Note: API clients are now created on-demand by features using GeminiClientFactory
+		// Note: API clients are now created on-demand by features using OllamaClientFactory
 		this.gfile = new ScribeFile(this);
 
 		// Initialize model manager
@@ -866,13 +864,13 @@ export default class ObsidianGemini extends Plugin {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
 
 		// One-time migration: move API key from data.json to secret storage
-		if (!this.settings.apiKeySecretName && data?.apiKey) {
-			this.app.secretStorage.setSecret(MIGRATION_SECRET_NAME, data.apiKey);
+		if (!this.settings.ollamaBaseUrl && data?.ollamaUrl) {
+			this.app.secretStorage.setSecret(MIGRATION_SECRET_NAME, data.ollamaUrl);
 			// Verify the secret was stored before deleting the original
 			const stored = this.app.secretStorage.getSecret(MIGRATION_SECRET_NAME);
-			if (stored === data.apiKey) {
-				this.settings.apiKeySecretName = MIGRATION_SECRET_NAME;
-				delete (this.settings as any).apiKey;
+			if (stored === data.ollamaUrl) {
+				this.settings.ollamaBaseUrl = MIGRATION_SECRET_NAME;
+				delete (this.settings as any).ollamaUrl;
 				await this.saveData(this.settings);
 				this.logger?.log('Migrated API key from settings to secure storage');
 			} else {
@@ -917,20 +915,20 @@ export default class ObsidianGemini extends Plugin {
 		await this.saveData(this.settings);
 
 		// Check if we need to re-initialize
-		const apiKeyChanged = this.previousApiKey !== this.apiKey;
-		const needsInit = !this.isGeminiInitialized && this.apiKey;
+		const ollamaUrlChanged = this.previousApiKey !== this.ollamaUrl;
+		const needsInit = !this.isGeminiInitialized && this.ollamaUrl;
 
 		// Only re-initialize if API key changed or if not initialized but now have key
-		if (apiKeyChanged || needsInit) {
+		if (ollamaUrlChanged || needsInit) {
 			try {
 				await this.setupGeminiScribe();
 				this.isGeminiInitialized = true;
-				this.previousApiKey = this.apiKey;
+				this.previousApiKey = this.ollamaUrl;
 				this.previousRagEnabled = this.settings.ragIndexing.enabled;
 
 				// If this is the first successful initialization, we may need to
 				// re-register UI components to make them functional
-				if (needsInit && !apiKeyChanged) {
+				if (needsInit && !ollamaUrlChanged) {
 					new Notice('Gemini Scribe is now ready to use!');
 				}
 			} catch (error) {

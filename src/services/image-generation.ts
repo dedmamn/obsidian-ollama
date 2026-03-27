@@ -1,19 +1,19 @@
 import ObsidianGemini from '../main';
 import { Notice, App, Modal, Setting, TextAreaComponent } from 'obsidian';
-import { BaseModelRequest, GeminiClient, GeminiClientFactory } from '../api';
+import { BaseModelRequest, OllamaClient, OllamaClientFactory } from '../api';
 import { GeminiPrompts } from '../prompts';
 
 export class ImageGeneration {
 	private plugin: InstanceType<typeof ObsidianGemini>;
-	private client: GeminiClient;
+	private client: OllamaClient;
 	private prompts: GeminiPrompts;
 
 	constructor(plugin: InstanceType<typeof ObsidianGemini>) {
 		this.plugin = plugin;
 		this.prompts = new GeminiPrompts(plugin);
-		this.client = new GeminiClient(
+		this.client = new OllamaClient(
 			{
-				apiKey: plugin.apiKey,
+				baseUrl: plugin.ollamaUrl,
 				temperature: plugin.settings.temperature,
 				topP: plugin.settings.topP,
 				streamingEnabled: false,
@@ -84,7 +84,7 @@ export class ImageGeneration {
 		}
 
 		// Create a summary-specific model API for prompt generation
-		const modelApi = GeminiClientFactory.createSummaryModel(this.plugin);
+		const modelApi = OllamaClientFactory.createSummaryModel(this.plugin);
 
 		const request: BaseModelRequest = {
 			prompt: this.prompts.imagePromptGenerator({ content: fileContent }),

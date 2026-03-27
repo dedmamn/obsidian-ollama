@@ -2,7 +2,7 @@
  * Configuration for a specific model
  */
 export interface ModelConfig {
-	apiKey: string;
+	ollamaUrl: string;
 	model: string;
 	temperature: number;
 	topP: number;
@@ -31,7 +31,7 @@ export interface ApiFeatures {
 /**
  * Complete API configuration
  *
- * @deprecated Use GeminiClientConfig instead
+ * @deprecated Use OllamaClientConfig instead
  */
 export interface ApiConfig {
 	modelConfig: ModelConfig;

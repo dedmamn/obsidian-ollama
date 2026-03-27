@@ -2,7 +2,7 @@ import ObsidianGemini from './main';
 import { Editor, Notice } from 'obsidian';
 import { ExtendedModelRequest } from './api/index';
 import { GeminiPrompts } from './prompts';
-import { GeminiClientFactory } from './api/simple-factory';
+import { OllamaClientFactory } from './api/simple-factory';
 import { getErrorMessage } from './utils/error-utils';
 
 export class SelectionRewriter {
@@ -65,7 +65,7 @@ export class SelectionRewriter {
 			new Notice('Rewriting selected text...');
 
 			// Create a rewrite-specific model API
-			const modelApi = GeminiClientFactory.createRewriteModel(this.plugin);
+			const modelApi = OllamaClientFactory.createRewriteModel(this.plugin);
 
 			const result = await modelApi.generateModelResponse(request);
 
@@ -115,7 +115,7 @@ Rewrite the entire document according to the user's instructions. Maintain the m
 			new Notice('Rewriting entire file...');
 
 			// Create a rewrite-specific model API
-			const modelApi = GeminiClientFactory.createRewriteModel(this.plugin);
+			const modelApi = OllamaClientFactory.createRewriteModel(this.plugin);
 
 			const result = await modelApi.generateModelResponse(request);
 

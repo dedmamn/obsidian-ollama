@@ -1,5 +1,5 @@
 import ObsidianGemini from '../main';
-import { App, PluginSettingTab, Setting, SettingGroup, Notice, setIcon, SecretComponent } from 'obsidian';
+import { App, PluginSettingTab, Setting, SettingGroup, Notice, setIcon } from 'obsidian';
 import { selectModelSetting } from './settings-helpers';
 import { FolderSuggest } from './folder-suggest';
 import { sanitizeKeySegment } from '../mcp/mcp-oauth-provider';
@@ -445,15 +445,14 @@ export default class ObsidianGeminiSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName('API Key')
-			.setDesc(
-				'Link your Google Gemini API key. Create a secret in Obsidian Settings → Secrets, then link it here. Get a key free at https://aistudio.google.com/apikey'
-			)
-			.addComponent((el) =>
-				new SecretComponent(this.app, el)
-					.setValue(this.plugin.settings.apiKeySecretName)
-					.onChange(async (secretName) => {
-						this.plugin.settings.apiKeySecretName = secretName;
+			.setName('Ollama Base URL')
+			.setDesc('URL of your local Ollama server.')
+			.addText((text) =>
+				text
+					.setPlaceholder('http://localhost:11434')
+					.setValue(this.plugin.settings.ollamaBaseUrl)
+					.onChange(async (value) => {
+						this.plugin.settings.ollamaBaseUrl = value;
 						await this.plugin.saveSettings();
 					})
 			);

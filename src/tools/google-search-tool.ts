@@ -2,7 +2,7 @@ import { Tool, ToolResult, ToolExecutionContext } from './types';
 import { ToolCategory } from '../types/agent';
 import { ToolClassification } from '../types/tool-policy';
 import type ObsidianGemini from '../main';
-import { GoogleGenAI } from '@google/genai';
+
 import { getDefaultModelForRole } from '../models';
 
 /**
@@ -41,7 +41,7 @@ export class GoogleSearchTool implements Tool {
 
 		try {
 			// Check if API key is available
-			if (!plugin.apiKey) {
+			if (!plugin.ollamaUrl) {
 				return {
 					success: false,
 					error: 'Google API key not configured',
@@ -49,7 +49,8 @@ export class GoogleSearchTool implements Tool {
 			}
 
 			// Create a separate model instance with Google Search enabled
-			const genAI = new GoogleGenAI({ apiKey: plugin.apiKey });
+			throw new Error('Google Search tool is not supported with Ollama');
+			const genAI = {} as any;
 
 			// Use the models API similar to gemini-api-new.ts
 			const modelToUse = plugin.settings.chatModelName || getDefaultModelForRole('chat');

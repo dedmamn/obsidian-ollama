@@ -5,7 +5,7 @@
  * straightforward approach focused solely on Gemini.
  */
 
-import { GeminiClient, GeminiClientConfig } from './gemini-client';
+import { OllamaClient, OllamaClientConfig } from './ollama-client';
 import { ModelApi } from './interfaces/model-api';
 import { GeminiPrompts } from '../prompts';
 import { RetryDecorator } from './retry-decorator';
@@ -26,19 +26,19 @@ export enum ModelUseCase {
 /**
  * Simple factory for creating Gemini API clients
  */
-export class GeminiClientFactory {
+export class OllamaClientFactory {
 	/**
-	 * Create a GeminiClient from plugin settings
+	 * Create a OllamaClient from plugin settings
 	 *
 	 * @param plugin - Plugin instance with settings
 	 * @param useCase - The use case for this model (determines which model to use)
 	 * @param overrides - Optional config overrides (for per-session settings)
-	 * @returns Configured GeminiClient instance
+	 * @returns Configured OllamaClient instance
 	 */
 	static createFromPlugin(
 		plugin: ObsidianGemini,
 		useCase: ModelUseCase,
-		overrides?: Partial<GeminiClientConfig>
+		overrides?: Partial<OllamaClientConfig>
 	): ModelApi {
 		const settings = plugin.settings;
 
@@ -67,8 +67,8 @@ export class GeminiClientFactory {
 		}
 
 		// Build config
-		const config: GeminiClientConfig = {
-			apiKey: plugin.apiKey,
+		const config: OllamaClientConfig = {
+			baseUrl: plugin.ollamaUrl,
 			model: modelName,
 			temperature: settings.temperature ?? 1.0,
 			topP: settings.topP ?? 0.95,
@@ -80,7 +80,7 @@ export class GeminiClientFactory {
 		const prompts = new GeminiPrompts(plugin);
 
 		// Create client
-		const client = new GeminiClient(config, prompts, plugin);
+		const client = new OllamaClient(config, prompts, plugin);
 
 		// Wrap with retry decorator
 		const retryConfig = {
@@ -92,15 +92,15 @@ export class GeminiClientFactory {
 	}
 
 	/**
-	 * Create a GeminiClient with custom configuration
+	 * Create a OllamaClient with custom configuration
 	 *
 	 * @param config - Complete client configuration
 	 * @param prompts - Optional prompts instance
 	 * @param plugin - Optional plugin instance
-	 * @returns Configured GeminiClient instance wrapped with retry logic
+	 * @returns Configured OllamaClient instance wrapped with retry logic
 	 */
-	static createCustom(config: GeminiClientConfig, prompts?: GeminiPrompts, plugin?: ObsidianGemini): ModelApi {
-		const client = new GeminiClient(config, prompts, plugin);
+	static createCustom(config: OllamaClientConfig, prompts?: GeminiPrompts, plugin?: ObsidianGemini): ModelApi {
+		const client = new OllamaClient(config, prompts, plugin);
 
 		// Use retry config from plugin settings if available, otherwise use defaults
 		const retryConfig = plugin
@@ -121,13 +121,13 @@ export class GeminiClientFactory {
 	 *
 	 * @param plugin - Plugin instance
 	 * @param sessionConfig - Optional session-level config (model, temperature, topP)
-	 * @returns Configured GeminiClient for chat
+	 * @returns Configured OllamaClient for chat
 	 */
 	static createChatModel(
 		plugin: ObsidianGemini,
 		sessionConfig?: { model?: string; temperature?: number; topP?: number }
 	): ModelApi {
-		const overrides: Partial<GeminiClientConfig> = {};
+		const overrides: Partial<OllamaClientConfig> = {};
 
 		if (sessionConfig) {
 			// Session config takes precedence
@@ -147,7 +147,7 @@ export class GeminiClientFactory {
 	 * Create a summary model
 	 *
 	 * @param plugin - Plugin instance
-	 * @returns Configured GeminiClient for summaries
+	 * @returns Configured OllamaClient for summaries
 	 */
 	static createSummaryModel(plugin: ObsidianGemini): ModelApi {
 		return this.createFromPlugin(plugin, ModelUseCase.SUMMARY);
@@ -157,7 +157,7 @@ export class GeminiClientFactory {
 	 * Create a completions model
 	 *
 	 * @param plugin - Plugin instance
-	 * @returns Configured GeminiClient for completions
+	 * @returns Configured OllamaClient for completions
 	 */
 	static createCompletionsModel(plugin: ObsidianGemini): ModelApi {
 		return this.createFromPlugin(plugin, ModelUseCase.COMPLETIONS);
@@ -167,7 +167,7 @@ export class GeminiClientFactory {
 	 * Create a rewrite model
 	 *
 	 * @param plugin - Plugin instance
-	 * @returns Configured GeminiClient for rewriting
+	 * @returns Configured OllamaClient for rewriting
 	 */
 	static createRewriteModel(plugin: ObsidianGemini): ModelApi {
 		return this.createFromPlugin(plugin, ModelUseCase.REWRITE);
@@ -177,7 +177,7 @@ export class GeminiClientFactory {
 	 * Create a search model
 	 *
 	 * @param plugin - Plugin instance
-	 * @returns Configured GeminiClient for search operations
+	 * @returns Configured OllamaClient for search operations
 	 */
 	static createSearchModel(plugin: ObsidianGemini): ModelApi {
 		return this.createFromPlugin(plugin, ModelUseCase.SEARCH);

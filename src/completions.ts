@@ -3,7 +3,7 @@ import { MarkdownView, Notice } from 'obsidian';
 import { forceableInlineSuggestion, Suggestion } from 'codemirror-companion-extension';
 import { BaseModelRequest } from './api/index';
 import { GeminiPrompts } from './prompts';
-import { GeminiClientFactory } from './api/simple-factory';
+import { OllamaClientFactory } from './api/simple-factory';
 
 export class GeminiCompletions {
 	private plugin: InstanceType<typeof ObsidianGemini>;
@@ -47,7 +47,7 @@ export class GeminiCompletions {
 
 	async generateNextSentence(contentBeforeCursor: string, contentAfterCursor: string): Promise<string> {
 		// Create a completions-specific model API
-		const modelApi = GeminiClientFactory.createCompletionsModel(this.plugin);
+		const modelApi = OllamaClientFactory.createCompletionsModel(this.plugin);
 
 		let request: BaseModelRequest = {
 			prompt: this.prompts.completionsPrompt({
