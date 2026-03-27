@@ -1,7 +1,7 @@
 import ObsidianGemini from './main';
 import { GeminiPrompts } from './prompts';
 import { BaseModelRequest } from './api/index';
-import { GeminiClientFactory } from './api/simple-factory';
+import { OllamaClientFactory } from './api/simple-factory';
 import { Notice } from 'obsidian';
 
 export class GeminiSummary {
@@ -41,7 +41,7 @@ export class GeminiSummary {
 			}
 
 			// Create a summary-specific model API
-			const modelApi = GeminiClientFactory.createSummaryModel(this.plugin);
+			const modelApi = OllamaClientFactory.createSummaryModel(this.plugin);
 
 			const request: BaseModelRequest = {
 				prompt: this.prompts.summaryPrompt({ content: fileContent }),

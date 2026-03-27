@@ -1,6 +1,6 @@
 import ObsidianGemini from '../main';
 import { ModelApi } from '../api/interfaces/model-api';
-import { GeminiClientFactory } from '../api/simple-factory';
+import { OllamaClientFactory } from '../api/simple-factory';
 import { SessionManager } from './session-manager';
 import { ToolExecutionEngine } from '../tools/execution-engine';
 import { ToolRegistry } from '../tools/tool-registry';
@@ -62,7 +62,7 @@ export class AgentFactory {
 	 */
 	static createAgentModel(plugin: InstanceType<typeof ObsidianGemini>, session: ChatSession): ModelApi {
 		// Use session's model configuration if available
-		return GeminiClientFactory.createChatModel(plugin, session.modelConfig);
+		return OllamaClientFactory.createChatModel(plugin, session.modelConfig);
 	}
 
 	/**

@@ -10,7 +10,6 @@
  * - #129: 429 errors from oversized context
  */
 
-import { GoogleGenAI } from '@google/genai';
 import { Logger } from '../utils/logger';
 import type ObsidianGemini from '../main';
 
@@ -20,8 +19,8 @@ import contextSummaryPromptContent from '../../prompts/contextSummaryPrompt.txt'
 /** Aggressive compaction triggers at this % of total model context window */
 const AGGRESSIVE_COMPACTION_THRESHOLD_PERCENT = 80;
 
-/** Default model input token limit (1M for all current Gemini models) */
-const DEFAULT_INPUT_TOKEN_LIMIT = 1_000_000;
+/** Default model input token limit (100k is a safe default for Ollama models) */
+const DEFAULT_INPUT_TOKEN_LIMIT = 100_000;
 
 /** Minimum number of recent turns to preserve during compaction */
 const MIN_RECENT_TURNS_TO_KEEP = 6;
@@ -50,7 +49,7 @@ export interface TokenUsageInfo {
 	/** Estimated total tokens in current context */
 	estimatedTokens: number;
 	/** Model's input token limit */
-	inputTokenLimit: number;
+	inputTokenLimit?: number;
 	/** Percentage of limit used */
 	percentUsed: number;
 	/** Tokens served from Gemini's implicit cache */
@@ -72,13 +71,13 @@ export interface UsageMetadata {
 export class ContextManager {
 	private lastUsageMetadata: UsageMetadata | null = null;
 	private acceptNextLowerUpdate = false;
-	private ai: GoogleGenAI;
+	private ai: any;
 
 	constructor(
 		private plugin: ObsidianGemini,
 		private logger: Logger
 	) {
-		this.ai = new GoogleGenAI({ apiKey: plugin.apiKey });
+		this.ai = null;
 	}
 
 	/**
@@ -132,17 +131,15 @@ export class ContextManager {
 	 * Get the input token limit for a given model.
 	 * Uses ModelDiscoveryService cache if available, otherwise falls back to default.
 	 */
-	private async getInputTokenLimit(modelName: string): Promise<number> {
+	/* unused private async _getInputTokenLimit(modelName: string): Promise<number> {
 		try {
 			const modelManager = this.plugin.getModelManager();
 			const discoveredModels = await modelManager.getDiscoveredModels();
 			if (discoveredModels.length > 0) {
 				const model = discoveredModels.find(
-					(m) => m.name === `models/${modelName}` || m.name === modelName || m.displayName === modelName
+					(m) => m.name === `models/${modelName}` || m.name === modelName
 				);
-				if (model?.inputTokenLimit) {
-					return model.inputTokenLimit;
-				}
+				if (model) { return 100000; }
 			}
 		} catch (error) {
 			this.logger.warn('[ContextManager] Failed to get model token limit from discovery:', error);
@@ -153,31 +150,30 @@ export class ContextManager {
 	/**
 	 * Get the compaction threshold in tokens based on settings.
 	 */
-	private async getCompactionThreshold(modelName: string): Promise<number> {
-		const inputTokenLimit = await this.getInputTokenLimit(modelName);
+	private async getCompactionThreshold(_modelName: string): Promise<number> {
 		const threshold = this.plugin.settings.contextCompactionThreshold / 100;
-		return Math.floor(inputTokenLimit * threshold);
+		return Math.floor(DEFAULT_INPUT_TOKEN_LIMIT * threshold);
 	}
 
 	/**
 	 * Get the aggressive compaction threshold in tokens.
 	 */
-	private async getAggressiveThreshold(modelName: string): Promise<number> {
-		const inputTokenLimit = await this.getInputTokenLimit(modelName);
-		return Math.floor(inputTokenLimit * (AGGRESSIVE_COMPACTION_THRESHOLD_PERCENT / 100));
+	private async getAggressiveThreshold(_modelName: string): Promise<number> {
+		return Math.floor(DEFAULT_INPUT_TOKEN_LIMIT * (AGGRESSIVE_COMPACTION_THRESHOLD_PERCENT / 100));
 	}
 
 	/**
 	 * Get current estimated token usage info.
 	 */
-	async getTokenUsage(modelName: string): Promise<TokenUsageInfo> {
-		const inputTokenLimit = await this.getInputTokenLimit(modelName);
+	async getTokenUsage(_modelName: string): Promise<TokenUsageInfo> {
 		const estimatedTokens = this.lastUsageMetadata?.promptTokenCount ?? 0;
 		const cachedTokens = this.lastUsageMetadata?.cachedContentTokenCount ?? 0;
+		const inputTokenLimit = DEFAULT_INPUT_TOKEN_LIMIT;
+		const percentUsed = inputTokenLimit > 0 ? Math.round((estimatedTokens / inputTokenLimit) * 100) : 0;
 		return {
 			estimatedTokens,
 			inputTokenLimit,
-			percentUsed: inputTokenLimit > 0 ? Math.round((estimatedTokens / inputTokenLimit) * 100 * 10) / 10 : 0,
+			percentUsed,
 			cachedTokens,
 		};
 	}
@@ -230,6 +226,10 @@ export class ContextManager {
 	 * Count tokens for a given set of contents using the Gemini API.
 	 */
 	async countTokens(modelName: string, contents: any[]): Promise<number> {
+		if (!this.ai) {
+			// No token-counting API available (e.g. Ollama); fall back to cached estimate
+			return this.lastUsageMetadata?.promptTokenCount ?? 0;
+		}
 		try {
 			const config: any = {};
 
@@ -388,6 +388,10 @@ export class ContextManager {
 	 * Generate a summary of conversation turns using Gemini.
 	 */
 	private async summarizeConversation(turns: any[], modelName: string): Promise<string> {
+		if (!this.ai) {
+			// No summarization API available (e.g. Ollama); return fallback
+			return 'Previous conversation context could not be summarized. The conversation continues below.';
+		}
 		// Convert turns to readable text for summarization
 		const conversationText = turns
 			.map((turn) => {
@@ -429,7 +433,7 @@ export class ContextManager {
 			});
 
 			const summary = response.candidates?.[0]?.content?.parts
-				?.map((part) => ('text' in part && part.text ? part.text : ''))
+				?.map((part: any) => ('text' in part && part.text ? part.text : ''))
 				.join('');
 
 			if (!summary?.trim()) {

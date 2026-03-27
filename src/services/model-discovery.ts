@@ -1,21 +1,23 @@
 import ObsidianGemini from '../main';
 
-export interface GoogleModel {
+export interface OllamaModel {
 	name: string;
-	displayName: string;
-	description: string;
-	version: string;
-	inputTokenLimit: number;
-	outputTokenLimit: number;
-	supportedGenerationMethods: string[];
-	baseModelId?: string;
-	maxTemperature?: number;
-	topP?: number; // Default topP value for this model (0-1 range)
-	topK?: number; // Default topK value for this model
+	model: string;
+	modified_at: string;
+	size: number;
+	digest: string;
+	details: {
+		parent_model: string;
+		format: string;
+		family: string;
+		families: string[];
+		parameter_size: string;
+		quantization_level: string;
+	};
 }
 
 export interface ModelDiscoveryResult {
-	models: GoogleModel[];
+	models: OllamaModel[];
 	lastUpdated: number;
 	success: boolean;
 	error?: string;
@@ -24,18 +26,13 @@ export interface ModelDiscoveryResult {
 export class ModelDiscoveryService {
 	private plugin: ObsidianGemini;
 	private cache: ModelDiscoveryResult | null = null;
-	private readonly CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
-	private readonly API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+	private readonly CACHE_DURATION = 1 * 60 * 60 * 1000; // 1 hour
 
 	constructor(plugin: ObsidianGemini) {
 		this.plugin = plugin;
 	}
 
-	/**
-	 * Discover available models from Google API
-	 */
 	async discoverModels(forceRefresh = false): Promise<ModelDiscoveryResult> {
-		// Check cache first
 		if (!forceRefresh && this.cache && this.isCacheValid()) {
 			return this.cache;
 		}
@@ -58,139 +55,45 @@ export class ModelDiscoveryService {
 				success: false,
 				error: error instanceof Error ? error.message : 'Unknown error',
 			};
-
-			// Return cached models if available, even if stale
 			return this.cache || result;
 		}
 	}
 
-	/**
-	 * Fetch models from Google API with pagination support and detailed parameter information
-	 */
-	private async fetchModelsFromAPI(): Promise<GoogleModel[]> {
-		const apiKey = this.plugin.apiKey;
-		if (!apiKey) {
-			throw new Error('API key not configured');
+	private async fetchModelsFromAPI(): Promise<OllamaModel[]> {
+		const baseUrl = this.plugin.settings.ollamaBaseUrl;
+		if (!baseUrl) {
+			throw new Error('Ollama Base URL not configured');
 		}
 
-		let allModels: GoogleModel[] = [];
-		let pageToken: string | undefined;
-
-		// First, get the list of models
-		do {
-			const url = new URL(`${this.API_BASE}/models`);
-			url.searchParams.set('key', apiKey);
-			if (pageToken) {
-				url.searchParams.set('pageToken', pageToken);
-			}
-			url.searchParams.set('pageSize', '50'); // Max page size
-
-			const response = await fetch(url.toString());
-			if (!response.ok) {
-				throw new Error(`API request failed: ${response.status} ${response.statusText}`);
-			}
-
-			const data = await response.json();
-			allModels = allModels.concat(data.models || []);
-			pageToken = data.nextPageToken;
-		} while (pageToken);
-
-		const filteredModels = allModels.filter((model) => this.isGenerativeModel(model));
-
-		// Now fetch detailed information for each model to get parameter limits
-		const detailedResults = await Promise.allSettled(
-			filteredModels.map((model) => this.fetchModelDetails(model, apiKey))
-		);
-
-		const detailedModels = detailedResults
-			.filter(
-				(result): result is PromiseFulfilledResult<GoogleModel> =>
-					result.status === 'fulfilled' && result.value !== null
-			)
-			.map((result) => result.value);
-
-		const failedCount = detailedResults.length - detailedModels.length;
-		if (failedCount > 0) {
-			this.plugin.logger.warn(`Failed to fetch detailed information for ${failedCount} models`);
+		const url = new URL(`${baseUrl}/api/tags`);
+		const response = await fetch(url.toString());
+		if (!response.ok) {
+			throw new Error(`API request failed: ${response.status} ${response.statusText}`);
 		}
 
-		return detailedModels;
+		const data = await response.json();
+		return data.models || [];
 	}
 
-	/**
-	 * Fetch detailed model information including parameter limits
-	 */
-	private async fetchModelDetails(model: GoogleModel, apiKey: string): Promise<GoogleModel | null> {
-		try {
-			const url = new URL(`${this.API_BASE}/${model.name}`);
-			url.searchParams.set('key', apiKey);
-
-			const response = await fetch(url.toString());
-			if (!response.ok) {
-				this.plugin.logger.warn(`Failed to fetch details for model ${model.name}: ${response.status}`);
-				return model; // Return basic model info if detailed fetch fails
-			}
-
-			const detailedData = await response.json();
-
-			// Merge the detailed information with the basic model data
-			return {
-				...model,
-				maxTemperature: detailedData?.maxTemperature,
-				topP: detailedData?.topP,
-				topK: detailedData?.topK,
-			};
-		} catch (error) {
-			this.plugin.logger.warn(`Error fetching model details for ${model.name}:`, error);
-			return model; // Return basic model info if there's an error
-		}
-	}
-
-	/**
-	 * Filter to only generative text models suitable for our use case
-	 */
-	private isGenerativeModel(model: GoogleModel): boolean {
-		return (
-			model.supportedGenerationMethods?.includes('generateContent') &&
-			model.name.includes('gemini') && // Focus on Gemini models
-			!model.name.includes('vision') // Exclude vision-only models for now
-		);
-	}
-
-	/**
-	 * Check if cache is still valid
-	 */
 	private isCacheValid(): boolean {
 		return !!(this.cache && Date.now() - this.cache.lastUpdated < this.CACHE_DURATION);
 	}
 
-	/**
-	 * Persist cache to plugin data
-	 */
 	private async persistCache(result: ModelDiscoveryResult): Promise<void> {
 		const data = (await this.plugin.loadData()) || {};
 		data.modelDiscoveryCache = result;
 		await this.plugin.saveData(data);
 	}
 
-	/**
-	 * Load cache from plugin data
-	 */
 	async loadCache(): Promise<void> {
 		const data = (await this.plugin.loadData()) || {};
 		this.cache = data.modelDiscoveryCache || null;
 	}
 
-	/**
-	 * Clear the cache
-	 */
 	clearCache(): void {
 		this.cache = null;
 	}
 
-	/**
-	 * Get cache status information
-	 */
 	getCacheInfo(): { hasCache: boolean; isValid: boolean; lastUpdated?: number } {
 		return {
 			hasCache: !!this.cache,

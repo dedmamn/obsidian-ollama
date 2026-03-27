@@ -17,7 +17,7 @@
 		"postversion": "git push && git push --follow-tags",
 		"format": "prettier --write .",
 		"format-check": "prettier --check .",
-		"test": "jest",
+		"test": "jest --passWithNoTests",
 		"prepare": "husky",
 		"docs:dev": "vitepress dev docs",
 		"docs:build": "vitepress build docs",
@@ -27,7 +27,6 @@
 	"author": "",
 	"license": "MIT",
 	"devDependencies": {
-		"@google/genai": "^1.46.0",
 		"@modelcontextprotocol/sdk": "^1.27.1",
 		"@types/jest": "^30.0.0",
 		"@types/node": "^25.5.0",

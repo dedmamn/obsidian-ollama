@@ -1,6 +1,6 @@
 import ObsidianGemini from '../main';
 import { GeminiModel, ModelUpdateResult, getUpdatedModelSettings, DEFAULT_GEMINI_MODELS } from '../models';
-import { ModelDiscoveryService, GoogleModel } from './model-discovery';
+import { ModelDiscoveryService, OllamaModel } from './model-discovery';
 import { ModelMapper } from './model-mapper';
 import { ParameterValidationService, ParameterRanges } from './parameter-validation';
 
@@ -33,7 +33,7 @@ export class ModelManager {
 	async getAvailableModels(options: ModelUpdateOptions = {}): Promise<GeminiModel[]> {
 		// If dynamic discovery is disabled, return filtered static models
 		if (!this.plugin.settings.modelDiscovery?.enabled) {
-			return this.filterModelsForVersion(ModelManager.staticModels, false);
+			return this.filterModels(ModelManager.staticModels, false);
 		}
 
 		try {
@@ -50,14 +50,14 @@ export class ModelManager {
 				}
 
 				// Filter for Gemini 2.5+ models only, excluding image models
-				return this.filterModelsForVersion(dynamicModels, false);
+				return this.filterModels(dynamicModels, false);
 			}
 		} catch (error) {
 			this.plugin.logger.warn('Model discovery failed, falling back to static models:', error);
 		}
 
 		// Fallback to filtered static models
-		return this.filterModelsForVersion(ModelManager.staticModels, false);
+		return this.filterModels(ModelManager.staticModels, false);
 	}
 
 	/**
@@ -65,7 +65,7 @@ export class ModelManager {
 	 */
 	async getImageGenerationModels(): Promise<GeminiModel[]> {
 		// Always start with static models as baseline
-		const staticImageModels = this.filterModelsForVersion(ModelManager.staticModels, true);
+		const staticImageModels = this.filterModels(ModelManager.staticModels, true);
 
 		// If dynamic discovery is disabled, return filtered static models
 		if (!this.plugin.settings.modelDiscovery?.enabled) {
@@ -97,7 +97,7 @@ export class ModelManager {
 				);
 
 				// Filter for image generation models only
-				const filtered = this.filterModelsForVersion(dynamicModels, true);
+				const filtered = this.filterModels(dynamicModels, true);
 				this.plugin.logger.debug(
 					`getImageGenerationModels (discovery enabled): filtered ${filtered.length} from ${dynamicModels.length} models`,
 					filtered.map((m) => m.value)
@@ -216,122 +216,13 @@ export class ModelManager {
 	 * @param models - Array of models to filter
 	 * @param imageModelsOnly - If true, return only image generation models. If false, exclude image generation models.
 	 */
-	private filterModelsForVersion(models: GeminiModel[], imageModelsOnly: boolean): GeminiModel[] {
-		this.plugin.logger.debug(`Filtering ${models.length} models. imageModelsOnly=${imageModelsOnly}`);
-
-		// Helper to check if a stable version exists for a preview model
-		const hasStableVersion = (previewModelValue: string, allModels: GeminiModel[]): boolean => {
-			// Pattern: gemini-1.5-pro-preview-04-09 -> stable: gemini-1.5-pro
-			// Pattern: gemini-2.5-flash-preview-09-2025 -> stable: gemini-2.5-flash
-			// Pattern: gemini-2.5-flash-image-preview -> stable: gemini-2.5-flash-image
-			const baseNameMatch = previewModelValue.match(
-				/^(gemini-[\d.]+(?:-pro|-flash|-flash-lite)(?:-image)?)(?:-preview|-exp)/
-			);
-			if (!baseNameMatch) return false;
-
-			const baseName = baseNameMatch[1];
-			// Check if the base name exists in the list (exact match)
-			return allModels.some((m) => m.value === baseName);
-		};
-
+	private filterModels(models: GeminiModel[], imageModelsOnly: boolean): GeminiModel[] {
 		return models.filter((model) => {
-			const modelValue = model.value.toLowerCase();
-
-			if (modelValue.includes('nano') || modelValue.includes('banana')) {
-				// Allow Nano Banana if it's an image model and we are looking for image models
-				const isImageModel = model.supportsImageGeneration || modelValue.includes('image');
-				if (imageModelsOnly && isImageModel) {
-					this.plugin.logger.debug(`Model allowed (Nano Banana Image): ${model.value}`);
-					return true;
-				} else {
-					this.plugin.logger.debug(`Model excluded (nano/banana): ${model.value}`);
-					return false;
-				}
-			}
-
-			// 1. Exclude known non-generative/specialized types
-			if (
-				modelValue.includes('embedding') ||
-				modelValue.includes('aqa') ||
-				modelValue.includes('learnlm') ||
-				modelValue.includes('gemma') // Exclude Gemma for now as we focus on Gemini
-			) {
-				return false;
-			}
-
-			// 2. Exclude Gemini 2.0 entirely (including thinking models)
-			if (modelValue.includes('gemini-2.0')) {
-				return false;
-			}
-
-			// 3. Exclude Imagen, Veo, TTS, and Computer Use models
-			// Note: We need to exclude 'imagen' specifically, not just 'image'
-			if (modelValue.includes('imagen-') || modelValue.startsWith('imagen')) {
-				this.plugin.logger.debug(`Model excluded (imagen): ${model.value}`);
-				return false;
-			}
-			if (modelValue.includes('veo')) {
-				this.plugin.logger.debug(`Model excluded (veo): ${model.value}`);
-				return false;
-			}
-			if (modelValue.includes('tts')) {
-				this.plugin.logger.debug(`Model excluded (tts): ${model.value}`);
-				return false;
-			}
-			if (modelValue.includes('computer')) {
-				this.plugin.logger.debug(`Model excluded (computer): ${model.value}`);
-				return false;
-			}
-
-			// 4. Filter by image generation capability
 			if (imageModelsOnly) {
-				// Must be an image model
-				// Check for "image" in name (e.g. gemini-2.5-flash-image) OR supportsImageGeneration flag
-				// We already excluded imagen and veo above.
-				const isImageModel = model.supportsImageGeneration || modelValue.includes('image');
-				if (!isImageModel) {
-					return false;
-				}
+				return model.supportsImageGeneration;
 			} else {
-				// Text/Chat models
-				// Exclude image-only models
-				if (model.supportsImageGeneration || modelValue.includes('image')) {
-					return false;
-				}
+				return !model.supportsImageGeneration;
 			}
-
-			// 5. Clean up dated previews if stable version exists
-			// Apply to both text and image models
-			if (modelValue.includes('preview') || modelValue.includes('exp')) {
-				if (hasStableVersion(modelValue, models)) {
-					this.plugin.logger.debug(`Model filtered out (redundant preview): ${model.value}`);
-					return false;
-				}
-			}
-
-			// 6. Version Check (for both text and image)
-			// We want Gemini 2.5+, Gemini 3+, and "latest" aliases.
-
-			// Check for "latest" aliases
-			if (modelValue.includes('latest')) {
-				return true;
-			}
-
-			// Check for Gemini 3+
-			if (modelValue.includes('gemini-3')) {
-				return true;
-			}
-
-			// Check for Gemini 2.5+
-			if (modelValue.includes('gemini-2.5')) {
-				return true;
-			}
-
-			// Log why this model was filtered out
-			this.plugin.logger.debug(
-				`Model filtered out (failed version check): ${model.value} (imageModelsOnly=${imageModelsOnly})`
-			);
-			return false;
 		});
 	}
 
@@ -420,7 +311,7 @@ export class ModelManager {
 	/**
 	 * Get discovered models with parameter information
 	 */
-	async getDiscoveredModels(): Promise<GoogleModel[]> {
+	async getDiscoveredModels(): Promise<OllamaModel[]> {
 		if (!this.plugin.settings.modelDiscovery?.enabled) {
 			return [];
 		}

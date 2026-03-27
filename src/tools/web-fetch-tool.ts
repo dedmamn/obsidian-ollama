@@ -2,7 +2,7 @@ import { Tool, ToolResult, ToolExecutionContext } from './types';
 import { ToolCategory } from '../types/agent';
 import { ToolClassification } from '../types/tool-policy';
 import type ObsidianGemini from '../main';
-import { GoogleGenAI } from '@google/genai';
+
 import { requestUrlWithRetry } from '../utils/proxy-fetch';
 import TurndownService from 'turndown';
 import { decodeHtmlEntities } from '../utils/html-entities';
@@ -53,13 +53,6 @@ export class WebFetchTool implements Tool {
 	async execute(params: { url: string; query: string }, context: ToolExecutionContext): Promise<ToolResult> {
 		const plugin = context.plugin as InstanceType<typeof ObsidianGemini>;
 
-		if (!plugin.apiKey) {
-			return {
-				success: false,
-				error: 'API key not configured',
-			};
-		}
-
 		try {
 			// Validate URL
 			const urlObj = new URL(params.url);
@@ -70,92 +63,12 @@ export class WebFetchTool implements Tool {
 				};
 			}
 
-			// Create a new instance of GoogleGenAI
-			const genAI = new GoogleGenAI({ apiKey: plugin.apiKey });
-
-			// Use the same model that's configured for chat
-			// This ensures consistency with the main conversation
-			const modelToUse = plugin.settings.chatModelName || 'gemini-2.5-flash';
-
-			// Create a prompt that includes the URL and the query
-			const prompt = `${params.query} for ${params.url}`;
-
-			// Generate content with URL context using the genAI.models API
-			plugin.logger.log('Web fetch - sending prompt:', prompt);
-			const result = await genAI.models.generateContent({
-				model: modelToUse,
-				contents: prompt,
-				config: {
-					temperature: plugin.settings.temperature || 0.7,
-					tools: [{ urlContext: {} }],
-				},
-			});
-			plugin.logger.log('Web fetch - received result:', result);
-
-			// Extract text from response
-			let text = '';
-			if (result.candidates?.[0]?.content?.parts) {
-				for (const part of result.candidates[0].content.parts) {
-					if (part.text) {
-						text += part.text;
-					}
-				}
-			}
-
-			if (!text) {
-				return {
-					success: false,
-					error: 'No response generated from URL content',
-				};
-			}
-
-			// Extract URL context metadata if available
-			const urlMetadata = result.candidates?.[0]?.urlContextMetadata;
-
-			// Log metadata for debugging
-			if (urlMetadata?.urlMetadata) {
-				plugin.logger.log('URL Context Metadata:', urlMetadata.urlMetadata);
-				// Log more details about the metadata structure
-				if (urlMetadata.urlMetadata.length > 0) {
-					plugin.logger.log('First metadata entry:', JSON.stringify(urlMetadata.urlMetadata[0], null, 2));
-				}
-			}
-
-			// Check if URL retrieval failed - the field is urlRetrievalStatus (camelCase)
-			const urlRetrievalFailed = urlMetadata?.urlMetadata?.some((meta: any) => {
-				const status = meta.urlRetrievalStatus;
-				plugin.logger.log('Checking URL status:', status);
-				return (
-					status === 'URL_RETRIEVAL_STATUS_ERROR' ||
-					status === 'URL_RETRIEVAL_STATUS_ACCESS_DENIED' ||
-					status === 'URL_RETRIEVAL_STATUS_NOT_FOUND'
-				);
-			});
-
-			if (urlRetrievalFailed) {
-				plugin.logger.log('URL retrieval failed, attempting fallback fetch...');
-				// Try fallback fetch
-				return await this.fallbackFetch(params, plugin);
-			}
-
-			return {
-				success: true,
-				data: {
-					url: params.url,
-					query: params.query,
-					content: text,
-					urlsRetrieved:
-						urlMetadata?.urlMetadata?.map((meta: any) => ({
-							url: meta.retrievedUrl,
-							status: meta.urlRetrievalStatus,
-						})) || [],
-					fetchedAt: new Date().toISOString(),
-				},
-			};
+			// URL Context (AI-powered extraction) is not available with Ollama.
+			// Fall back to direct HTTP fetch + markdown conversion.
+			return await this.fallbackFetch(params, plugin);
 		} catch (error) {
 			plugin.logger.error('Web fetch error:', error);
 
-			// Provide more specific error messages
 			if (error instanceof TypeError && error.message.includes('Failed to construct')) {
 				return {
 					success: false,
@@ -163,50 +76,21 @@ export class WebFetchTool implements Tool {
 				};
 			}
 
-			if (error instanceof Error) {
-				// Check for common API errors
-				if (error.message.includes('404')) {
-					return {
-						success: false,
-						error: 'URL not found (404)',
-					};
-				}
-				if (error.message.includes('403')) {
-					return {
-						success: false,
-						error: 'Access forbidden to this URL (403)',
-					};
-				}
-				if (error.message.includes('quota')) {
-					return {
-						success: false,
-						error: 'API quota exceeded',
-					};
-				}
-			}
-
-			// Try fallback fetch for any other errors
-			plugin.logger.log('Primary web fetch failed, attempting fallback...');
-			try {
-				return await this.fallbackFetch(params, plugin);
-			} catch (fallbackError) {
-				return {
-					success: false,
-					error: `Failed to fetch URL with both methods: ${error instanceof Error ? error.message : 'Unknown error'}`,
-				};
-			}
+			return {
+				success: false,
+				error: `Failed to fetch URL: ${error instanceof Error ? error.message : 'Unknown error'}`,
+			};
 		}
 	}
 
 	/**
-	 * Fallback method using direct HTTP fetch
+	 * Direct HTTP fetch with HTML-to-Markdown conversion.
 	 */
 	private async fallbackFetch(
 		params: { url: string; query: string },
 		plugin: InstanceType<typeof ObsidianGemini>
 	): Promise<ToolResult> {
 		try {
-			// Fetch the URL content directly with retry logic for transient errors
 			const response = await requestUrlWithRetry({
 				url: params.url,
 				method: 'GET',
@@ -222,7 +106,6 @@ export class WebFetchTool implements Tool {
 				};
 			}
 
-			// Convert HTML to Markdown using turndown for safe, structured extraction
 			const rawHtml = response.text;
 
 			// Extract title before conversion
@@ -245,45 +128,13 @@ export class WebFetchTool implements Tool {
 				content = content.substring(0, 10000) + '\n\n[Content truncated...]';
 			}
 
-			// Now use Gemini to analyze the content
-			const genAI = new GoogleGenAI({ apiKey: plugin.apiKey });
-			const modelToUse = plugin.settings.chatModelName || 'gemini-2.5-flash';
-
-			// Create a prompt with the content
-			const prompt = `Based on the following web page content from ${params.url}, ${params.query}\n\nWeb Page Title: ${title}\n\nContent:\n${content}`;
-
-			const result = await genAI.models.generateContent({
-				model: modelToUse,
-				contents: prompt,
-				config: {
-					temperature: plugin.settings.temperature || 0.7,
-				},
-			});
-
-			// Extract text from response
-			let analysisText = '';
-			if (result.candidates?.[0]?.content?.parts) {
-				for (const part of result.candidates[0].content.parts) {
-					if (part.text) {
-						analysisText += part.text;
-					}
-				}
-			}
-
-			if (!analysisText) {
-				return {
-					success: false,
-					error: 'No analysis generated from page content',
-				};
-			}
-
 			return {
 				success: true,
 				data: {
 					url: params.url,
 					query: params.query,
-					content: analysisText,
-					title: title,
+					content,
+					title,
 					fallbackMethod: true,
 					fetchedAt: new Date().toISOString(),
 				},

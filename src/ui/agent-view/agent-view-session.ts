@@ -2,7 +2,7 @@ import { App, TFile, Notice } from 'obsidian';
 import { ChatSession } from '../../types/agent';
 import { GeminiConversationEntry } from '../../types/conversation';
 import type ObsidianGemini from '../../main';
-import { GeminiClientFactory } from '../../api/simple-factory';
+import { OllamaClientFactory } from '../../api/simple-factory';
 
 /**
  * Callbacks for UI operations that the session manager needs to trigger
@@ -223,7 +223,7 @@ User: ${history[0].message}`;
 
 			try {
 				// Generate title using the model (use default settings for labeling)
-				const modelApi = GeminiClientFactory.createChatModel(this.plugin);
+				const modelApi = OllamaClientFactory.createChatModel(this.plugin);
 				const response = await modelApi.generateModelResponse({
 					userMessage: titlePrompt,
 					conversationHistory: [],

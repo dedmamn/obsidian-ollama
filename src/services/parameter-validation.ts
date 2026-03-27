@@ -1,4 +1,4 @@
-import { GoogleModel } from './model-discovery';
+import { OllamaModel } from './model-discovery';
 
 export interface ParameterRanges {
 	temperature: {
@@ -32,15 +32,13 @@ export class ParameterValidationService {
 	/**
 	 * Get parameter ranges based on discovered model information
 	 */
-	static getParameterRanges(discoveredModels: GoogleModel[]): ParameterRanges {
+	static getParameterRanges(discoveredModels: OllamaModel[]): ParameterRanges {
 		if (!discoveredModels || discoveredModels.length === 0) {
 			return this.DEFAULT_RANGES;
 		}
 
 		// Find the maximum temperature across all models
-		const maxTemperatures = discoveredModels
-			.map((model) => model.maxTemperature)
-			.filter((temp) => temp !== undefined && temp !== null) as number[];
+		const maxTemperatures = [] as number[];
 
 		const maxTemp =
 			maxTemperatures.length > 0
@@ -64,12 +62,9 @@ export class ParameterValidationService {
 	/**
 	 * Get parameter information for specific models
 	 */
-	static getModelParameterInfo(discoveredModels: GoogleModel[]): ModelParameterInfo[] {
+	static getModelParameterInfo(discoveredModels: OllamaModel[]): ModelParameterInfo[] {
 		return discoveredModels.map((model) => ({
 			modelName: model.name,
-			maxTemperature: model.maxTemperature,
-			topP: model.topP,
-			topK: model.topK,
 		}));
 	}
 
@@ -78,25 +73,13 @@ export class ParameterValidationService {
 	 */
 	static validateTemperature(
 		value: number,
-		modelName?: string,
-		discoveredModels: GoogleModel[] = []
+		_modelName?: string,
+		discoveredModels: OllamaModel[] = []
 	): {
 		isValid: boolean;
 		adjustedValue?: number;
 		warning?: string;
 	} {
-		// If we have specific model information, check against that model's limits first
-		if (modelName) {
-			const modelInfo = discoveredModels.find((m) => m.name === modelName || m.displayName === modelName);
-			if (modelInfo?.maxTemperature !== undefined && value > modelInfo.maxTemperature) {
-				return {
-					isValid: false,
-					adjustedValue: modelInfo.maxTemperature,
-					warning: `Temperature ${value} exceeds ${modelName} limit of ${modelInfo.maxTemperature}. Adjusted to ${modelInfo.maxTemperature}.`,
-				};
-			}
-		}
-
 		// Then check against global ranges
 		const ranges = this.getParameterRanges(discoveredModels);
 
@@ -118,7 +101,7 @@ export class ParameterValidationService {
 	static validateTopP(
 		value: number,
 		_modelName?: string,
-		discoveredModels: GoogleModel[] = []
+		discoveredModels: OllamaModel[] = []
 	): {
 		isValid: boolean;
 		adjustedValue?: number;
@@ -141,7 +124,7 @@ export class ParameterValidationService {
 	/**
 	 * Get user-friendly parameter information for display in settings
 	 */
-	static getParameterDisplayInfo(discoveredModels: GoogleModel[]): {
+	static getParameterDisplayInfo(discoveredModels: OllamaModel[]): {
 		temperature: string;
 		topP: string;
 		hasModelData: boolean;
@@ -149,12 +132,7 @@ export class ParameterValidationService {
 		const ranges = this.getParameterRanges(discoveredModels);
 		const hasModelData = discoveredModels && discoveredModels.length > 0;
 
-		// Get unique default topP values from discovered models for informational purposes
-		const defaultTopPValues = discoveredModels
-			.map((model) => model.topP)
-			.filter((topP) => topP !== undefined && topP !== null) as number[];
-
-		const uniqueTopPValues = [...new Set(defaultTopPValues)].sort((a, b) => a - b);
+		const uniqueTopPValues: number[] = [];
 
 		const topPInfo =
 			uniqueTopPValues.length > 0

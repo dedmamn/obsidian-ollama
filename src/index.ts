@@ -54,7 +54,7 @@ export type { ModelRole, GeminiModel, ModelUpdateResult } from './models';
 export type { ObsidianGeminiSettings, ModelDiscoverySettings } from './main';
 
 // Service Types
-export type { GoogleModel, ModelDiscoveryResult } from './services/model-discovery';
+export type { OllamaModel, ModelDiscoveryResult } from './services/model-discovery';
 
 export type { ModelUpdateOptions } from './services/model-manager';
 
@@ -64,7 +64,7 @@ export type { ParameterRanges, ModelParameterInfo } from './services/parameter-v
 export type { LoopDetectionInfo } from './tools/loop-detector';
 
 // Model and Agent Factories
-export { GeminiClientFactory, ModelUseCase } from './api/simple-factory';
+export { OllamaClientFactory, ModelUseCase } from './api/simple-factory';
 
 export { AgentFactory } from './agent/agent-factory';
 
@@ -106,9 +106,9 @@ export { GoogleSearchTool } from './tools/google-search-tool';
 export { WebFetchTool } from './tools/web-fetch-tool';
 
 // Gemini API Client (for advanced usage)
-export { GeminiClient } from './api/gemini-client';
+export { OllamaClient } from './api/ollama-client';
 
-export type { GeminiClientConfig } from './api/gemini-client';
+export type { OllamaClientConfig } from './api/ollama-client';
 
 // Main Plugin Class (for type reference)
 export { default as ObsidianGeminiPlugin } from './main';
